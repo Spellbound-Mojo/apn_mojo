@@ -1,0 +1,144 @@
+"""Documentation inventories and rendering; no MkDocs or CLI dependency."""
+import json
+import posixpath
+import re
+
+from api_reference import package_markdown, primaries
+from export_contract import audit_exports
+from module_layout import PUBLIC_PACKAGES, ROOT, TOP, top_level_reexports
+CONTENT = ROOT / 'docs/content'
+EXAMPLES = ROOT / 'docs/examples'
+DIRECTIVE = re.compile(r'<!--\s*(api|example|source):\s*([^>]*?)\s*-->')
+FENCE = re.compile(r'(^```[^\n]*\n.*?^```[ \t]*$)', re.M | re.S)
+
+
+def data(name):
+    return json.loads((ROOT / 'docs' / name).read_text())
+
+
+def relative(page, destination):
+    return posixpath.relpath(destination, posixpath.dirname(page) or '.')
+
+
+def _example_bar(key, page):
+    """The header line of an example: its file name and a download link."""
+    # A Markdown link, so MkDocs resolves the download for the page's own URL.
+    source = relative(page, 'downloads/' + key)
+    return (f'<div class="example-bar" markdown="span"><span class="example-file">{posixpath.basename(key)}</span> '
+            f'[Download]({source}){{ .example-download }}</div>')
+
+
+def example_markdown(key, page):
+    """A complete program as one unit: its file, the code, how to run it and what it prints."""
+    spec = data('examples.json')['examples'][key]
+    code = (ROOT / key).read_text().rstrip()
+    return (f'<div class="example" markdown="1">\n{_example_bar(key, page)}\n\n'
+            f'```mojo\n{code}\n```\n\n'
+            f'<div class="example-run" markdown="1"><span class="example-label">Run from the repository root</span> '
+            f'`pixi run mojo run -I src {key}`</div>\n\n'
+            f'<div class="example-output" markdown="1"><span class="example-label">Output</span>\n\n'
+            f'```text\n{spec["stdout"].rstrip()}\n```\n\n</div>\n</div>\n')
+
+
+def source_markdown(key, page):
+    """Show a maintained example file that is not run on its own (a module)."""
+    code = (ROOT / key).read_text().rstrip()
+    return f'<div class="example" markdown="1">\n{_example_bar(key, page)}\n\n```mojo\n{code}\n```\n\n</div>\n'
+
+
+REFERENCE = {TOP: 'reference/apn_mojo.md', 'integer': 'reference/integer.md', 'rational': 'reference/rational.md',
+             'float': 'reference/float.md', 'complex': 'reference/complex.md', 'exact_complex': 'reference/exact_complex.md', 'ball': 'reference/ball.md', 'complex_ball': 'reference/complex_ball.md',
+             'batch': 'reference/batch.md',
+             'common': 'reference/conversion.md'}
+
+
+def package_page(package, page):
+    def page_of(owner, name):
+        return relative(page, REFERENCE[owner]) + '#' + name
+    def source_of(provider):
+        return relative(page, f'downloads/src/apn_mojo/{provider}.mojo')
+    text = package_markdown(package, data('api.json'), page_of, source_of)
+    if package == TOP:
+        rows = '\n'.join(f'| [`{name}`]({page_of(owner, name)}) | `apn_mojo.{owner}` |'
+                         for name, owner in sorted(top_level_reexports().items()))
+        text += ('\n\n## Re-exports\n\nThese names are declared in a family package and imported here too.\n\n'
+                 '| Name | Declared in |\n|---|---|\n' + rows + '\n')
+    return text
+
+
+def render_markdown(text, page):
+    def replace(match):
+        kind, value = match.groups()
+        if kind == 'api':
+            assert value in PUBLIC_PACKAGES, f'Unknown API package: {value}'
+            return package_page(value, page)
+        if kind == 'example':
+            return example_markdown(value, page)
+        return source_markdown(value, page)
+    return ''.join(part if index % 2 else DIRECTIVE.sub(replace, part)
+                   for index, part in enumerate(FENCE.split(text)))
+
+
+def api_problems(package, api):
+    problems = []
+    if not api['packages'][package]['summary']:
+        problems.append('package docstring')
+    def check(label, overloads):
+        if not all(o['summary'] for o in overloads):
+            problems.append(f'{label}: an overload without a summary line')
+        for o in primaries(overloads):
+            problems.extend(f'{label}: parameter {p["name"]}' for p in o['parameters'] if not p['description'])
+            problems.extend(f'{label}: argument {a["name"]}' for a in o['args'] if not a['description'])
+            if o['returns'] and o['returns']['type'] not in ('', 'None') and not o['returns']['doc']:
+                problems.append(f'{label}: return value')
+            if o['raises'] and not o['raises_doc']:
+                problems.append(f'{label}: raised error')
+    for full, entry in api['entries'].items():
+        owner, name = full.split('.', 1)
+        if owner != package:
+            continue
+        if entry['kind'] == 'function':
+            check(name, entry['overloads'])
+            continue
+        if not entry['summary']:
+            problems.append(f'{name}: summary')
+        problems += [f'{name}: parameter {p["name"]}' for p in entry['parameters'] if not p['description']]
+        for method, overloads in entry.get('methods', {}).items():
+            check(f'{name}.{method}', overloads)
+    return problems
+
+
+def audit_docs():
+    reviewed = audit_exports()
+    exports = json.loads((ROOT / 'docs/public-exports.json').read_text())
+    modules = []
+    examples = set()
+    pages = sorted(CONTENT.rglob('*.md'))
+    for page in pages:
+        text = page.read_text()
+        assert text.startswith('# '), f'Missing page title: {page}'
+        # Executable Mojo comes from maintained files, never drifting copies.
+        assert not re.search(r'^```mojo\s*$', text, re.M), f'Use an example directive: {page}'
+        outside_fences = ''.join(FENCE.split(text)[::2])
+        for kind, value in DIRECTIVE.findall(outside_fences):
+            if kind == 'api':
+                modules.append(value)
+            elif kind == 'example':
+                examples.add(value)
+            elif kind == 'source':
+                path = ROOT / value
+                assert path.is_file() and path.suffix == '.mojo' and path.is_relative_to(EXAMPLES), \
+                    f'Source directive must name a file in docs/examples: {page}: {value}'
+    # Every public package has one reference page rendered from its docstrings.
+    assert sorted(modules) == sorted(PUBLIC_PACKAGES), 'API package pages differ from the public packages'
+    api = data('api.json')
+    assert set(api['entries']) == set(exports['exports']), 'docs/api.json is stale; run python scripts/api_docs.py'
+    for package in modules:
+        problems = api_problems(package, api)
+        assert not problems, f'Undocumented API in {package}:\n  ' + '\n  '.join(problems)
+    manifest = data('examples.json')['examples']
+    assert examples == set(manifest), 'Unused or missing executable example'
+    for name, spec in manifest.items():
+        assert (ROOT / name).is_file() and name.endswith('.mojo')
+        assert isinstance(spec['stdout'], str) and spec['stdout'].endswith('\n')
+    return dict(pages=len(pages), exports=reviewed['exports'], packages=len(modules), examples=len(examples))

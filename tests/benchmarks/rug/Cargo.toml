@@ -1,0 +1,14 @@
+[package]
+name = "apn-reference-worker"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+rug = { version = "=1.30.0", default-features = false, features = ["integer", "rational", "float", "complex", "std"] }
+gmp-mpfr-sys = "=1.7.1"
+serde_json = "1"
+
+[profile.release]
+codegen-units = 1
+

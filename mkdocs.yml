@@ -1,0 +1,103 @@
+site_name: APN Mojo
+site_description: Arbitrary-precision numbers for Mojo on Linux and macOS — tutorials, architecture, API reference and examples.
+site_url: https://spellbound-mojo.github.io/apn_mojo/
+repo_url: https://github.com/Spellbound-Mojo/apn_mojo
+docs_dir: docs/content
+site_dir: .cache/docs-site
+use_directory_urls: true
+strict: true
+theme:
+  name: null
+  custom_dir: docs/theme
+  static_templates: [404.html]
+extra:
+  brand: apn
+  tagline: Exact by default. Rounded once.
+  license: Apache License 2.0
+plugins:
+  - search:
+      lang: en
+      min_search_length: 2
+hooks:
+  - docs/hooks.py
+markdown_extensions:
+  - admonition
+  - attr_list
+  - md_in_html
+  - def_list
+  - fenced_code
+  - tables
+  - pymdownx.arithmatex:
+      generic: true
+  - toc:
+      permalink: true
+  - codehilite:
+      guess_lang: false
+not_in_nav: |
+  /search.md
+validation:
+  nav:
+    omitted_files: warn
+    not_found: warn
+  links:
+    not_found: warn
+    anchors: warn
+    unrecognized_links: warn
+watch:
+  - src/apn_mojo
+  - docs/examples
+  - docs/examples.json
+nav:
+  - Welcome: index.md
+  - Get started:
+      - Installation: start/installation.md
+  - Tutorial:
+      - 1. Integer values: tutorial/integers.md
+      - 2. Exact fractions: tutorial/rationals.md
+      - 3. Floats of any precision: tutorial/floats.md
+      - 4. Complex numbers: tutorial/complex.md
+      - 5. Calculations with bounds: tutorial/balls.md
+      - 6. Batches and selections: tutorial/batches.md
+      - 7. Vectorization with vmap and lift: tutorial/vectorization.md
+      - 8. Errors and recovery: tutorial/errors.md
+      - 9. Text and JSON: tutorial/conversion.md
+  - Examples:
+      - Example gallery: examples/index.md
+  - Architecture:
+      - Overview: architecture/overview.md
+      - Design principles: architecture/principles.md
+      - Integer: architecture/integer.md
+      - Rational: architecture/rational.md
+      - Float: architecture/float.md
+      - Complex: architecture/complex.md
+      - Ball arithmetic: architecture/balls.md
+      - Correct rounding: architecture/certified.md
+      - Hypergeometric functions: architecture/hypergeometric.md
+      - Batches and execution: architecture/batches.md
+      - Reductions: architecture/reductions.md
+      - Conversion and interchange: architecture/conversion.md
+      - Benchmark results: architecture/benchmark-results.md
+      - Verification: architecture/verification.md
+  - API reference:
+      - How to read the reference: reference/index.md
+      - apn_mojo: reference/apn_mojo.md
+      - apn_mojo.integer: reference/integer.md
+      - apn_mojo.rational: reference/rational.md
+      - apn_mojo.float: reference/float.md
+      - apn_mojo.complex: reference/complex.md
+      - apn_mojo.exact_complex: reference/exact_complex.md
+      - apn_mojo.ball: reference/ball.md
+      - apn_mojo.complex_ball: reference/complex_ball.md
+      - apn_mojo.batch: reference/batch.md
+      - apn_mojo.common: reference/conversion.md
+  - Guides:
+      - Precision and accuracy: guides/precision.md
+      - Exact combinatorics: guides/combinatorics.md
+      - Counters and weighted totals: guides/totals.md
+      - Try and review the API: guides/review.md
+      - Support and limitations: guides/status.md
+      - Troubleshooting: guides/troubleshooting.md
+  - Contributing:
+      - Development: contributing/development.md
+      - Benchmarks: contributing/benchmarks.md
+      - Maintaining the docs: contributing/documentation.md

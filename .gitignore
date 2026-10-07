@@ -1,0 +1,15 @@
+# pixi environments
+.pixi/*
+!.pixi/config.toml
+
+# Generated validation evidence and Python runner cache.
+build/
+__pycache__/
+
+# macOS Finder metadata and AppleDouble sidecars.
+.DS_Store
+._*
+.cache/
+
+# Local cloud credentials and configuration.
+.aws
