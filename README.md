@@ -19,7 +19,33 @@ and [support and limitations](docs/content/guides/status.md) for library boundar
 
 ## Getting started
 
-To run APN Mojo from a source checkout, install [Pixi](https://pixi.sh/),
+APN Mojo is published as `apn_mojo` in the
+[Modular community channel](https://github.com/modular/modular-community),
+available once [modular/modular-community#392](https://github.com/modular/modular-community/pull/392) is merged. Add the channel to your
+[Pixi](https://pixi.sh) project and install the package. It is verified with
+Mojo 1.1.0 on Linux x86-64 and macOS arm64:
+
+```toml
+# pixi.toml
+[workspace]
+channels = ["https://conda.modular.com/max", "https://repo.prefix.dev/modular-community", "conda-forge"]
+```
+
+```sh
+pixi add apn_mojo "mojo==1.1.0"
+```
+
+Save [first_integer.mojo](docs/examples/first_integer.mojo) beside your
+project's `pixi.toml`, then run it; the installed package needs no `-I` flag:
+
+```sh
+pixi run mojo run first_integer.mojo
+```
+
+For a new project, the [installation guide](docs/content/start/installation.md)
+walks through creating the environment and running a first program.
+
+To work from a source checkout instead, install [Pixi](https://pixi.sh/),
 then get the source and its dependencies:
 
 ```sh
@@ -65,9 +91,10 @@ unchanged copy: True
 Starting with `Integer(2)` keeps the power exact. Updating `value` leaves
 the saved copy unchanged.
 
-Include `-I src` when running your own programs so Mojo can find the library.
-From another project, pass the absolute path to this checkout's `src`
-directory with `-I` and use the supported Mojo compiler.
+From a checkout, include `-I src` when running your own programs so Mojo can
+find the library; from another project, pass the absolute path to this
+checkout's `src` directory with `-I` and use the supported Mojo compiler. With
+the package installed, no `-I` flag is needed.
 Next, try `pixi run --locked example` for an Integer tour, or
 [quickstart.mojo](docs/examples/quickstart.mojo) for fractions, floats, and
 complex numbers too.
@@ -222,8 +249,12 @@ the available limits.
 
 ## Documentation
 
-Browse the [documentation source](docs/content/index.md), or start the local
-website to read the full API declarations and embedded runnable examples:
+The documentation is published at
+[spellbound-mojo.github.io/apn_mojo](https://spellbound-mojo.github.io/apn_mojo/):
+tutorials, guides, the architecture, an API reference generated from the
+source, runnable examples and benchmark results. Its sources are in
+[`docs/content`](docs/content/index.md); to browse them locally, start the
+website:
 
 ```sh
 pixi run --locked -e docs docs-serve

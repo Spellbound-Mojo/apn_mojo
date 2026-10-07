@@ -8,6 +8,45 @@ Linux x86-64 and macOS on Apple silicon. Check the
 [Mojo system requirements](https://docs.modular.com/mojo/requirements/)
 for operating-system and toolchain prerequisites.
 
+## Install the package
+
+APN Mojo is published as `apn_mojo` in the
+[Modular community channel](https://github.com/modular/modular-community),
+available once [modular/modular-community#392](https://github.com/modular/modular-community/pull/392) is merged. Install
+[Pixi](https://pixi.sh) if it is not already on your `PATH`, then create a
+project with the Mojo and Modular community channels:
+
+```sh
+pixi init apn-start \
+  --channel https://conda.modular.com/max \
+  --channel https://repo.prefix.dev/modular-community \
+  --channel conda-forge
+cd apn-start
+pixi add apn_mojo "mojo==1.1.0"
+```
+
+Run the remaining commands from `apn-start`, the directory containing the new
+`pixi.toml`. Pixi installs the precompiled `apn_mojo` package where Mojo finds
+it, so no source checkout or `-I` flag is needed. Save this program as
+`first_integer.mojo` beside `pixi.toml`:
+
+<!-- example: docs/examples/first_integer.mojo -->
+
+Then run it:
+
+```sh
+pixi run mojo run first_integer.mojo
+```
+
+In an existing Pixi project, add the three channels to `pixi.toml` and run the
+same `pixi add`:
+
+```toml
+# pixi.toml
+[workspace]
+channels = ["https://conda.modular.com/max", "https://repo.prefix.dev/modular-community", "conda-forge"]
+```
+
 ## Work from a checkout
 
 After installing Pixi, clone the repository and enter the project directory:
@@ -23,9 +62,8 @@ pixi run --locked mojo run -I src --Werror docs/examples/first_integer.mojo
 Run the documentation's commands from the checkout root, which contains
 `pixi.toml`. `--locked` keeps dependency versions
 fixed to `pixi.lock`, and `-I src` tells Mojo where to find the library. The
-last command runs this program:
-
-<!-- example: docs/examples/first_integer.mojo -->
+last command runs the program shown under
+[Install the package](#install-the-package).
 
 ## Run your own program
 

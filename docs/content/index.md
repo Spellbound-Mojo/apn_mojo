@@ -66,12 +66,15 @@ reductions, accumulations, and outer products from binary functions.
 
 ## First program
 
-After [installing the environment](start/installation.md), run this program
-from the directory containing `pixi.toml`:
+After [installing the package or a checkout](start/installation.md), run this
+program from the directory containing `pixi.toml`. From a checkout:
 
 ```sh
 pixi run --locked mojo run -I src docs/examples/quickstart.mojo
 ```
+
+With the `apn_mojo` package installed, save it as `quickstart.mojo` and run
+`pixi run mojo run quickstart.mojo`, without `-I src`.
 
 <!-- example: docs/examples/quickstart.mojo -->
 
