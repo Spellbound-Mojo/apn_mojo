@@ -30,6 +30,17 @@ quotient and remainder, choose `div_rem_floor`, `div_rem_trunc`, or
 `div_rem_euclid`; standard `divmod` is not supported. Checked size guards
 reject results that exceed addressable storage.
 
+## Text and bytes
+
+`to_string(base)` and `Integer(text, base=...)` accept bases 2 through 36.
+Power-of-two bases convert in time linear in the length; other bases in
+quadratic time, many digits per pass (see
+[Exact text](../architecture/conversion.md#exact-text)).
+For binary interchange, `to_bytes()` returns the magnitude in base 256, least
+significant byte first unless `big_endian=True`, and
+`Integer.from_bytes(bytes, negative=...)` rebuilds the value; the sign is
+`sign()`, and zero has no bytes.
+
 ## Functions on batches
 
 Use [`vmap`](batch.md#mapping-functions) to apply a scalar function to batch

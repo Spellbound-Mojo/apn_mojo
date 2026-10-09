@@ -36,6 +36,10 @@ from ._json import _json_decimal_bound, _read_integer_json
 from ..common.conversion import ConversionLimits, _ConversionBudget
 from ..common._text import _text_digit
 from ._text import _integer_text, _text_prefix, _format_bound
+from ._radix import (
+    _ChunkDivisor, _base_shift, _digits_in_chunk, _is_power_of_two_base, _power_of_two_digit_count,
+    _power_of_two_word_count, _radix_chunk, _read_power_of_two_digits, _write_chunk, _write_power_of_two_digits,
+)
 from ..common._traits import _BatchElement
 
 # Decimal text moves nineteen digits per step on 64-bit limbs: 10**19 is the
@@ -2027,38 +2031,44 @@ struct Integer(
 
     @staticmethod
     @no_inline
-    def _parse_decimal_words(
-        text: String, start: Int, end: Int, negative: Bool,
+    def _parse_chunked_words(
+        text: String, start: Int, end: Int, radix: Int, negative: Bool,
         mut budget: _ConversionBudget, element: Int, skip_decimal_point: Bool,
     ) raises -> Self:
         if not budget.bounded_allocation():
-            return Self._parse_decimal_limbs(text, start, end, negative, skip_decimal_point)
-        # A counted budget charges each growth of the words as it happens.
+            return Self._parse_chunked_limbs(text, start, end, radix, negative, skip_decimal_point)
+        # A counted budget charges each growth of the words as it happens. Each
+        # pass multiplies them by radix**k, the largest power under 2**32 (10**9).
+        var chunk = _radix_chunk(radix, UInt64(0xFFFFFFFF))
         var words = List[UInt32]()
         var bytes = text.as_bytes()
         var group = UInt64(0)
         var multiplier = UInt64(1)
+        var digits = 0
         for index in range(start, end):
             if bytes[index] == 95 or (skip_decimal_point and bytes[index] == 46):
                 continue
-            group = group * 10 + UInt64(_text_digit(bytes[index]))
-            multiplier *= 10
-            if multiplier == 1_000_000_000:
+            group = group * UInt64(radix) + UInt64(_text_digit(bytes[index]))
+            multiplier *= UInt64(radix)
+            digits += 1
+            if digits == chunk[1]:
                 Self._parse_group(words, multiplier, group, budget, element)
                 group = 0
                 multiplier = 1
-        if multiplier != 1:
+                digits = 0
+        if digits:
             Self._parse_group(words, multiplier, group, budget, element)
         return Self._from_budgeted_words(words^, negative, budget, element)
 
     @staticmethod
     @no_inline
-    def _parse_decimal_limbs(
-        text: String, start: Int, end: Int, negative: Bool, skip_decimal_point: Bool,
+    def _parse_chunked_limbs(
+        text: String, start: Int, end: Int, radix: Int, negative: Bool, skip_decimal_point: Bool,
     ) -> Self:
-        """Decimal digits nineteen at a time, each step one 64-by-64-bit
-        multiply-add per limb."""
-        var limbs = List[UInt64](capacity=(end - start) // 19 + 2)
+        """Digits as many at a time as fit in a limb (nineteen decimal ones),
+        each step one 64-by-64-bit multiply-add per limb."""
+        var chunk = _radix_chunk(radix, UInt64.MAX)
+        var limbs = List[UInt64](capacity=(end - start) // chunk[1] + 2)
         var bytes = text.as_bytes()
         var group = UInt64(0)
         var multiplier = UInt64(1)
@@ -2067,10 +2077,10 @@ struct Integer(
             var byte = bytes[index]
             if byte == 95 or (skip_decimal_point and byte == 46):
                 continue
-            group = group * 10 + UInt64(_text_digit(byte))
-            multiplier *= 10
+            group = group * UInt64(radix) + UInt64(_text_digit(byte))
+            multiplier *= UInt64(radix)
             digits += 1
-            if digits == 19:
+            if digits == chunk[1]:
                 _multiply_add_limbs(limbs, multiplier, group)
                 group = 0
                 multiplier = 1
@@ -2086,6 +2096,26 @@ struct Integer(
         return Self._from_words(words^, negative)
 
     @staticmethod
+    @no_inline
+    def _parse_power_of_two(
+        text: String, start: Int, end: Int, radix: Int, negative: Bool,
+        mut budget: _ConversionBudget, element: Int, skip_decimal_point: Bool,
+    ) raises -> Self:
+        """Pack the digits' bits into words: time linear in the length."""
+        var shift = _base_shift(radix)
+        var bytes = text.as_bytes()
+        var digits = 0
+        for index in range(start, end):
+            var byte = bytes[index]
+            if byte != 95 and not (skip_decimal_point and byte == 46):
+                digits += 1
+        var count = _power_of_two_word_count(digits, shift)
+        budget.allocate(count, 4, element)
+        var words = List[UInt32](length=count, fill=0)
+        _read_power_of_two_digits(bytes, start, end, shift, skip_decimal_point, words)
+        return Self._from_budgeted_words(words^, negative, budget, element)
+
+    @staticmethod
     def _parse_words(
         text: String,
         start: Int,
@@ -2096,9 +2126,15 @@ struct Integer(
         element: Int = -1,
         skip_decimal_point: Bool = False,
     ) raises -> Self:
-        if radix == 10 and end - start > 19:
-            return Self._parse_decimal_words(
-                text, start, end, negative, budget, element, skip_decimal_point
+        if _is_power_of_two_base(radix):
+            return Self._parse_power_of_two(
+                text, start, end, radix, negative, budget, element, skip_decimal_point
+            )
+        # Short text is cheaper digit by digit; decimal's chunk is 19 digits.
+        var chunk_digits = 19 if radix == 10 else _radix_chunk(radix, UInt64.MAX)[1]
+        if end - start > chunk_digits:
+            return Self._parse_chunked_words(
+                text, start, end, radix, negative, budget, element, skip_decimal_point
             )
         var words = List[UInt32]()
         var bytes = text.as_bytes()
@@ -2146,38 +2182,17 @@ struct Integer(
                 "Cannot format Integer with a prefix in this base; choose base"
                 " 2, 8, or 16, or set prefix=False."
             )
-        var bound = _format_bound(self._word_count())
+        _ = _format_bound(self._word_count())
         if limits:
             var budget = _ConversionBudget(limits)
             budget.values(1)
             return self._format_with_budget(base, prefix, uppercase, budget)
         if base == 10:
             return self._decimal()
-        var words = self._words_copy()
-        var digits = List[UInt8]()
-        while len(words):
-            var remainder = UInt64(0)
-            for i in range(len(words) - 1, -1, -1):
-                var total = (remainder << 32) | UInt64(words[i])
-                words[i] = UInt32(total // UInt64(base))
-                remainder = total % UInt64(base)
-            var digit = Int(remainder)
-            digits.append(
-                UInt8(digit + (48 if digit < 10 else 55 if uppercase else 87))
-            )
-            while len(words) and words[len(words) - 1] == 0:
-                _ = words.pop()
-        var bytes = List[UInt8](capacity=bound)
-        if self._negative():
-            bytes.append(45)
-        if prefix:
-            bytes.append(48)
-            bytes.append(_text_prefix(base, uppercase))
-        if not len(digits):
-            bytes.append(48)
-        for i in range(len(digits) - 1, -1, -1):
-            bytes.append(digits[i])
-        return String(from_utf8=Span(bytes))
+        var unlimited = _ConversionBudget(None)
+        if _is_power_of_two_base(base):
+            return self._format_power_of_two(base, prefix, uppercase, unlimited)
+        return self._format_chunked(base, prefix, uppercase, unlimited)
 
     def _format_with_budget(
         self,
@@ -2193,40 +2208,156 @@ struct Integer(
         var overhead = Int(self._negative()) + 2 * Int(prefix)
         budget.preflight(self.magnitude_bit_length(), base, overhead, element)
         budget.output(overhead, element)
-        budget.allocate(self._word_count(), 4, element)
-        var words = self._words_copy()
-        var digits = List[UInt8]()
-        if not len(words):
-            budget.output_digit(element)
-            budget.append(digits, UInt8(48), element)
-        while len(words):
-            budget.output_digit(element)
-            var remainder = UInt64(0)
-            for i in range(len(words) - 1, -1, -1):
-                var total = (remainder << 32) | UInt64(words[i])
-                words[i] = UInt32(total // UInt64(base))
-                remainder = total % UInt64(base)
-            var digit = Int(remainder)
-            budget.append(
-                digits,
-                UInt8(digit + (48 if digit < 10 else 55 if uppercase else 87)),
-                element,
-            )
-            while len(words) and words[len(words) - 1] == 0:
-                _ = words.pop()
-        budget.allocate(_checked_sum(len(digits), overhead), 1, element)
-        var bytes = List[UInt8](
-            capacity=_checked_count(_checked_sum(len(digits), overhead), 1)
-        )
+        if _is_power_of_two_base(base):
+            return self._format_power_of_two(base, prefix, uppercase, budget, element)
+        return self._format_chunked(base, prefix, uppercase, budget, element)
+
+    def _format_head(self, base: Int, prefix: Bool, uppercase: Bool, mut bytes: List[UInt8]) -> Int:
+        """Write the sign and prefix at the start of `bytes`; return their length."""
+        var at = 0
         if self._negative():
-            bytes.append(45)
+            bytes[0] = 45
+            at = 1
         if prefix:
-            bytes.append(48)
-            bytes.append(_text_prefix(base, uppercase))
-        for i in range(len(digits) - 1, -1, -1):
-            bytes.append(digits[i])
-        budget.string_allocation(len(bytes), element)
-        return String(from_utf8=Span(bytes))
+            bytes[at] = 48
+            bytes[at + 1] = _text_prefix(base, uppercase)
+            at += 2
+        return at
+
+    def _format_power_of_two(
+        self,
+        base: Int,
+        prefix: Bool,
+        uppercase: Bool,
+        mut budget: _ConversionBudget,
+        element: Int = -1,
+    ) raises -> String:
+        """Read each digit's bits from the magnitude: time linear in the length.
+
+        The digit count is exact before any digit is written, so it is charged
+        once; the only allocations are the bytes and the string.
+        """
+        var shift = _base_shift(base)
+        var count = _power_of_two_digit_count(self.magnitude_bit_length(), shift)
+        budget.digits(count, element)
+        budget.output(count, element)
+        var length = _checked_sum(count, Int(self._negative()) + 2 * Int(prefix))
+        budget.allocate(length, 1, element)
+        var bytes = List[UInt8](length=length, fill=48)
+        var at = self._format_head(base, prefix, uppercase, bytes)
+        var small = self._inline_words()
+        _write_power_of_two_digits(self._words_span(small), shift, uppercase, bytes, at, count)
+        budget.string_allocation(length, element)
+        # ASCII digits, a sign and a prefix are valid UTF-8 by construction.
+        return String(unsafe_from_utf8=Span(bytes))
+
+    def _format_chunked(
+        self,
+        base: Int,
+        prefix: Bool,
+        uppercase: Bool,
+        mut budget: _ConversionBudget,
+        element: Int = -1,
+    ) raises -> String:
+        """Divide the magnitude by base**k, the largest power under 2**64, per pass.
+
+        The remainders are groups of k digits, least significant first, as in
+        `_decimal`; each group's digits are charged as it is produced, the most
+        significant group by its own length.
+        """
+        var count = self._word_count()
+        if not count:
+            budget.digits(1, element)
+            budget.output(1, element)
+            var length = 1 + 2 * Int(prefix)
+            budget.allocate(length, 1, element)
+            var bytes = List[UInt8](length=length, fill=48)
+            _ = self._format_head(base, prefix, uppercase, bytes)
+            budget.string_allocation(length, element)
+            return String(unsafe_from_utf8=Span(bytes))
+        var divisor = _ChunkDivisor(base)
+        var limb_count = (count + 1) // 2
+        budget.allocate(limb_count, 8, element)
+        var limbs = List[UInt64](capacity=limb_count)
+        for i in range(limb_count):
+            limbs.append(UInt64(self._word(2 * i)) | (UInt64(self._word(2 * i + 1)) << 32))
+        # Each pass divides by at least 2**floor(log2(power)): a bound on the groups.
+        var group_bits = 63 - Int(count_leading_zeros(divisor.power))
+        var capacity = self.magnitude_bit_length() // group_bits + 2
+        budget.allocate(capacity, 8, element)
+        var groups = List[UInt64](capacity=capacity)
+        while len(limbs):
+            var rest = divisor.divide(limbs)
+            while len(limbs) and limbs[len(limbs) - 1] == 0:
+                _ = limbs.pop()
+            var digits = divisor.digits if len(limbs) else _digits_in_chunk(rest, base)
+            budget.digits(digits, element)
+            budget.output(digits, element)
+            groups.append(rest)
+        var top = groups[len(groups) - 1]
+        var top_digits = _digits_in_chunk(top, base)
+        var length = Int(self._negative()) + 2 * Int(prefix) + top_digits + divisor.digits * (len(groups) - 1)
+        budget.allocate(length, 1, element)
+        var bytes = List[UInt8](length=length, fill=48)
+        _ = self._format_head(base, prefix, uppercase, bytes)
+        var end = length
+        for i in range(len(groups) - 1):
+            _write_chunk(groups[i], base, uppercase, bytes, end, divisor.digits)
+            end -= divisor.digits
+        _write_chunk(top, base, uppercase, bytes, end, top_digits)
+        budget.string_allocation(length, element)
+        return String(unsafe_from_utf8=Span(bytes))
+
+    def to_bytes(self, *, big_endian: Bool = False) -> List[UInt8]:
+        """The magnitude in base 256, without leading zero bytes.
+
+        Zero gives no bytes. The sign is not included: `sign()` gives it, and
+        `Integer.from_bytes(x.to_bytes(), negative=x.sign() < 0)` is `x`. The
+        bytes are read directly from the magnitude, in time linear in its
+        length.
+
+        Args:
+            big_endian: Put the most significant byte first; by default the
+                least significant byte comes first.
+
+        Returns:
+            `(magnitude_bit_length() + 7) // 8` bytes.
+        """
+        var count = (self.magnitude_bit_length() + 7) // 8
+        var bytes = List[UInt8](length=count, fill=0)
+        var small = self._inline_words()
+        var words = self._words_span(small)
+        var target = bytes.unsafe_ptr()
+        for i in range(count):
+            var byte = UInt8((words.unsafe_get(i >> 2) >> UInt32((i & 3) * 8)) & 0xFF)
+            target.unsafe_offset(count - 1 - i if big_endian else i)[] = byte
+        return bytes^
+
+    @staticmethod
+    def from_bytes(
+        data: Span[UInt8, _], *, negative: Bool = False, big_endian: Bool = False
+    ) -> Self:
+        """The Integer whose magnitude has these bytes in base 256, with a sign.
+
+        Leading zero bytes are allowed. No bytes, or only zero bytes, give zero,
+        whatever `negative` says. Time is linear in the number of bytes.
+
+        Args:
+            data: The magnitude's bytes.
+            negative: Whether the result is negative.
+            big_endian: The most significant byte comes first; by default the
+                least significant byte comes first.
+
+        Returns:
+            The Integer.
+        """
+        var count = len(data)
+        var words = List[UInt32](length=(count + 3) // 4, fill=0)
+        var target = words.unsafe_ptr()
+        for i in range(count):
+            var byte = data[count - 1 - i] if big_endian else data[i]
+            target.unsafe_offset(i >> 2)[] |= UInt32(byte) << UInt32((i & 3) * 8)
+        return Self._from_words(words^, negative)
 
     def write_to(self, mut writer: Some[Writer]):
         """Write the canonical decimal form, as `print` does.

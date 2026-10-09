@@ -1,4 +1,4 @@
-"""A tour of Integer: text, JSON, division conventions, functions and batch updates."""
+"""A tour of Integer: text, bytes, JSON, division conventions, functions and batch updates."""
 
 from apn_mojo import (
     Batch,
@@ -45,6 +45,12 @@ def main() raises:
         " -0xFF_FF ", base=0, allow_whitespace=True, allow_underscores=True
     )
     print("hexadecimal:", code.to_string(16, prefix=True, uppercase=True))
+    var magnitude = code.to_bytes(big_endian=True)
+    print(
+        "bytes:",
+        len(magnitude),
+        Integer.from_bytes(Span(magnitude), negative=code.sign() < 0, big_endian=True),
+    )
 
     var quotient, remainder = div_rem_floor(-7, 3)
     print("floor:", quotient, remainder)
