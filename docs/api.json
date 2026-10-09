@@ -30462,6 +30462,44 @@
       "summary": "Parse an Integer from text."
      }
     ],
+    "from_bytes": [
+     {
+      "args": [
+       {
+        "convention": "",
+        "description": "The magnitude's bytes.",
+        "name": "data",
+        "type": "Span[UInt8, _]",
+        "variadic": false
+       },
+       {
+        "convention": "",
+        "description": "Whether the result is negative.",
+        "name": "negative",
+        "type": "Bool",
+        "variadic": false
+       },
+       {
+        "convention": "",
+        "description": "The most significant byte comes first; by default the\n    least significant byte comes first.",
+        "name": "big_endian",
+        "type": "Bool",
+        "variadic": false
+       }
+      ],
+      "description": "Leading zero bytes are allowed. No bytes, or only zero bytes, give zero,\nwhatever `negative` says. Time is linear in the number of bytes.",
+      "error": "",
+      "parameters": [],
+      "raises": false,
+      "raises_doc": "",
+      "returns": {
+       "doc": "The Integer.",
+       "type": "Self"
+      },
+      "signature": "def from_bytes(data: Span[UInt8, _], *, negative: Bool = False, big_endian: Bool = False) -> Self",
+      "summary": "The Integer whose magnitude has these bytes in base 256, with a sign."
+     }
+    ],
     "from_json": [
      {
       "args": [
@@ -30582,6 +30620,30 @@
       },
       "signature": "def sign(self) -> Int",
       "summary": "The sign: -1, 0 or 1."
+     }
+    ],
+    "to_bytes": [
+     {
+      "args": [
+       {
+        "convention": "",
+        "description": "Put the most significant byte first; by default the\n    least significant byte comes first.",
+        "name": "big_endian",
+        "type": "Bool",
+        "variadic": false
+       }
+      ],
+      "description": "Zero gives no bytes. The sign is not included: `sign()` gives it, and\n`Integer.from_bytes(x.to_bytes(), negative=x.sign() < 0)` is `x`. The\nbytes are read directly from the magnitude, in time linear in its\nlength.",
+      "error": "",
+      "parameters": [],
+      "raises": false,
+      "raises_doc": "",
+      "returns": {
+       "doc": "`(magnitude_bit_length() + 7) // 8` bytes.",
+       "type": "List[UInt8]"
+      },
+      "signature": "def to_bytes(self, *, big_endian: Bool = False) -> List[UInt8]",
+      "summary": "The magnitude in base 256, without leading zero bytes."
      }
     ],
     "to_json": [

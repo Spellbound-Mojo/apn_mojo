@@ -85,6 +85,38 @@ Arithmetic state, traps and sharing are never serialized.
 hexadecimal, optionally with single underscores between digits. Digits are
 validated before any magnitude is built.
 
+In a power-of-two base (2, 4, 8, 16 or 32) each digit is a fixed group of
+bits, so formatting reads the groups from the magnitude's words and parsing
+packs them into words: both take time linear in the length, and formatting
+knows its exact digit count before it writes. Any other base works in chunks
+of $k$ digits, where $b^k$ is the largest power of the base below $2^{64}$
+($10^{19}$, $3^{40}$, $36^{12}$): formatting divides the magnitude's limbs by
+$b^k$ once per chunk, by the reciprocal of the normalized divisor (Möller and
+Granlund's division by invariant integers, as decimal output always has), and
+parsing multiplies by $b^k$ and adds the next $k$ digits. That is still
+quadratic in the length, with $k$ digits per pass instead of one. Limits
+apply on every path: the digit and output counts are charged no later than
+the digits are produced, and allocations before they happen.
+
+`Integer.to_bytes` and `Integer.from_bytes` exchange the magnitude in base
+256, least significant byte first by default, with the sign kept apart; they
+copy bytes to and from the words, in linear time, and need no text at all.
+
+Measured on a 4-core Intel Xeon at 2.1 GHz with Mojo 1.1.0 at the default
+optimization level, on random 64 KiB magnitudes (524,288 bits), one run each,
+before and after these paths replaced one digit per pass (milliseconds):
+
+| Base | Format | Parse | Format with limits |
+|---|---|---|---|
+| 2 | 47,091 → 1.3 | 7,709 → 3.1 | 47,989 → 1.0 |
+| 16 | 8,733 → 0.32 | 1,922 → 0.77 | 8,619 → 0.20 |
+| 36 | 6,686 → 266 | 1,486 → 64 | 6,637 → 263 |
+| 10 | 213 → 214 | 61 → 64 | 10,934 → 219 |
+
+Unlimited decimal formatting and parsing already worked in chunks of 19
+digits and are unchanged; decimal output under limits now uses the same
+chunks. `to_bytes` and `from_bytes` take 0.05 and 0.09 ms at this size.
+
 **Rationals** parse `n/d` and exact decimals, so `"0.1"` is `1/10`. Decimal
 powers, multiplication, division and the gcd reduction run on budgeted buffers
 through the allocation-free Integer kernels.

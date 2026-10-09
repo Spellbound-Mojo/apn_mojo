@@ -1384,6 +1384,116 @@ struct _TensorPair[T: ImplicitlyCopyable & Deinitable](Copyable, Movable):
     var right: _Tensor[Self.T]
 
 
+def _radix_values() raises -> List[Integer]:
+    """Values at word, limb and chunk boundaries, and seeded multiword ones."""
+    var values: List[Integer] = [Integer(0), Integer(1), Integer(-1), Integer(Int64.MIN), Integer(UInt64.MAX)]
+    for bits in [31, 32, 33, 63, 64, 65, 127, 128, 129]:
+        values.append((Integer(1) << bits) - 1)
+        values.append(Integer(1) << bits)
+        values.append(-((Integer(1) << bits) + 1))
+    for base in [3, 7, 10, 36]:
+        for k in [12, 19, 22, 40]:
+            values.append(Integer(base) ** k - 1)
+            values.append(Integer(base) ** k)
+    var seed = UInt64(20260101)
+    for bits in [95, 160, 1000, 4099]:
+        var words = List[UInt32]()
+        for _ in range((bits + 31) // 32):
+            seed = seed * 6364136223846793005 + 1442695040888963407
+            words.append(UInt32(seed >> 32))
+        words[len(words) - 1] >>= UInt32(31 - (bits - 1) % 32)
+        values.append(Integer._from_words(words^, bits % 2 == 1))
+    return values^
+
+
+def test_integer_text_in_every_base() raises:
+    """Every base round-trips, with and without limits; power-of-two digits are the bits."""
+    var counted = ConversionLimits(max_digits=10_000_000, max_allocated_bytes=1 << 40)
+    for value in _radix_values():
+        var binary = value.to_string(2)
+        for base in range(2, 37):
+            var text = value.to_string(base)
+            assert_equal(value.to_string(base, limits=counted), text)
+            assert_equal(Integer(text, base=base), value)
+            assert_equal(Integer(text, base=base, limits=counted), value)
+            assert_equal(value.to_string(base, uppercase=True), text.upper())
+            if base == 4 or base == 8 or base == 16 or base == 32:
+                # Each digit is the next group of bits, from the least significant.
+                var shift = 2 if base == 4 else 3 if base == 8 else 4 if base == 16 else 5
+                var bits = binary.removeprefix("-")
+                var padded = String("0" * ((shift - bits.byte_length() % shift) % shift), bits)
+                var expected = String("-") if value.sign() < 0 else String()
+                for i in range(0, padded.byte_length(), shift):
+                    var digit = Int(Integer(String(padded[byte=i:i + shift]), base=2))
+                    expected += String(Integer(digit).to_string(base))
+                assert_equal(text, expected)
+        # The decimal budgeted path divides by 10**19 as _decimal does, separately.
+        assert_equal(value.to_string(limits=counted), String(value))
+    assert_equal(Integer(35).to_string(36), "z")
+    assert_equal((Integer(36) ** 12 - 1).to_string(36), "z" * 12)
+    assert_equal((Integer(36) ** 12).to_string(36, uppercase=True), "1" + "0" * 12)
+    assert_equal((Integer(3) ** 40).to_string(3), "1" + "0" * 40)
+    assert_equal(Integer(-255).to_string(16, prefix=True, uppercase=True), "-0XFF")
+    assert_equal(Integer(0).to_string(2, prefix=True), "0b0")
+    assert_equal(Integer(0).to_string(7, limits=counted), "0")
+    assert_equal(Integer(-5).to_string(8, prefix=True, limits=counted), "-0o5")
+    assert_equal(Integer("1_0000_0000_0000_0000", base=16, allow_underscores=True), Integer(1) << 64)
+    assert_equal(Integer("-0b1_0", base=0, allow_underscores=True), -2)
+    assert_equal(Integer("z_z", base=36, allow_underscores=True), 36 * 35 + 35)
+    assert_equal(Integer("000000000000000000000000000000000001", base=16), 1)
+    assert_equal(Integer("0" * 40 + "1" + "0" * 40, base=7), Integer(7) ** 40)
+    # Digit and output limits are exact: the count fits, one less does not.
+    var wide = (Integer(1) << 1000) - 1
+    for base in [2, 16, 10, 36]:
+        var text = wide.to_string(base)
+        assert_equal(wide.to_string(base, limits=ConversionLimits(max_digits=text.byte_length())), text)
+        assert_equal(wide.to_string(base, limits=ConversionLimits(max_output_bytes=text.byte_length())), text)
+        with assert_raises(contains="max_digits"):
+            _ = wide.to_string(base, limits=ConversionLimits(max_digits=text.byte_length() - 1))
+        with assert_raises(contains="max_output_bytes"):
+            _ = wide.to_string(base, limits=ConversionLimits(max_output_bytes=text.byte_length() - 1))
+        with assert_raises(contains="max_allocated_bytes"):
+            _ = wide.to_string(base, limits=ConversionLimits(max_allocated_bytes=text.byte_length()))
+        with assert_raises(contains="max_allocated_bytes"):
+            _ = Integer(text, base=base, limits=ConversionLimits(max_allocated_bytes=8))
+
+
+def test_integer_bytes() raises:
+    """Bytes are the magnitude in base 256, either way round; the sign is separate."""
+    var two_bytes = Integer(0x0102).to_bytes()
+    assert_true(len(two_bytes) == 2 and two_bytes[0] == 2 and two_bytes[1] == 1)
+    var big = Integer(0x0102).to_bytes(big_endian=True)
+    assert_true(len(big) == 2 and big[0] == 1 and big[1] == 2)
+    assert_true(len(Integer(0).to_bytes()) == 0)
+    var negative = Integer(-258).to_bytes()
+    assert_true(len(negative) == 2 and negative[0] == 2 and negative[1] == 1)
+    var padded: List[UInt8] = [0, 0, 1, 0]
+    assert_equal(Integer.from_bytes(Span(padded)), 65536)
+    assert_equal(Integer.from_bytes(Span(padded), big_endian=True), 256)
+    var nothing = List[UInt8]()
+    assert_equal(Integer.from_bytes(Span(nothing), negative=True), 0)
+    var zeros: List[UInt8] = [0, 0, 0]
+    assert_equal(Integer.from_bytes(Span(zeros), negative=True).sign(), 0)
+    var top: List[UInt8] = [0, 0, 0, 0, 0, 0, 0, 0x80]
+    assert_equal(Integer.from_bytes(Span(top), negative=True), Integer(Int64.MIN))
+    assert_equal(Integer.from_bytes(Span(top)), Integer(1) << 63)
+    for value in _radix_values():
+        var bytes = value.to_bytes()
+        assert_equal(len(bytes), (value.magnitude_bit_length() + 7) // 8)
+        assert_equal(Integer.from_bytes(Span(bytes), negative=value.sign() < 0), value)
+        var reversed = value.to_bytes(big_endian=True)
+        assert_equal(Integer.from_bytes(Span(reversed), negative=value.sign() < 0, big_endian=True), value)
+        for i in range(len(bytes)):
+            assert_true(bytes[i] == reversed[len(bytes) - 1 - i])
+        # Each byte is two hexadecimal digits.
+        if len(bytes):
+            var hex = String()
+            for i in range(len(reversed)):
+                var pair = Integer(Int(reversed[i])).to_string(16)
+                hex += pair if i == 0 or pair.byte_length() == 2 else String("0", pair)
+            assert_equal(hex, abs(value).to_string(16))
+
+
 def _tensor_call[
     T: ImplicitlyCopyable & Deinitable, R: ImplicitlyCopyable & Deinitable, //,
     function: def(T, T) raises thin -> R,

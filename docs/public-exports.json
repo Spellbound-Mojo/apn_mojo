@@ -6588,6 +6588,18 @@
             "sha256": "cd0fadd2992aedd37d287cd8db5a986cfdf20753e5f6585eb0a961e7f7fb88c7"
           }
         ],
+        "to_bytes": [
+          {
+            "signature": "def to_bytes(self, *, big_endian: Bool = False) -> List[UInt8]:",
+            "sha256": "6795d094d6f8b7dcb50f83b91fc79635559adf442a9fecc38dd66bc09595da5c"
+          }
+        ],
+        "from_bytes": [
+          {
+            "signature": "def from_bytes( data: Span[UInt8, _], *, negative: Bool = False, big_endian: Bool = False ) -> Self:",
+            "sha256": "8c44a9946d209c9b38301c86447b6d200b1c406f03f7053ceca8025aff730090"
+          }
+        ],
         "write_to": [
           {
             "signature": "def write_to(self, mut writer: Some[Writer]):",
