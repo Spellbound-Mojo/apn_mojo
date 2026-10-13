@@ -20,10 +20,9 @@ and [support and limitations](docs/content/guides/status.md) for library boundar
 ## Getting started
 
 APN Mojo is published as `apn_mojo` in the
-[Modular community channel](https://github.com/modular/modular-community),
-available once [modular/modular-community#392](https://github.com/modular/modular-community/pull/392) is merged. Add the channel to your
-[Pixi](https://pixi.sh) project and install the package. It is verified with
-Mojo 1.1.0 on Linux x86-64 and macOS arm64:
+[Modular community channel](https://github.com/modular/modular-community). Add
+the channel to your [Pixi](https://pixi.sh) project and install the package. It
+is verified with Mojo 1.1.0 on Linux x86-64 and macOS arm64:
 
 ```toml
 # pixi.toml

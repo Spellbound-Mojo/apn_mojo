@@ -11,10 +11,9 @@ for operating-system and toolchain prerequisites.
 ## Install the package
 
 APN Mojo is published as `apn_mojo` in the
-[Modular community channel](https://github.com/modular/modular-community),
-available once [modular/modular-community#392](https://github.com/modular/modular-community/pull/392) is merged. Install
-[Pixi](https://pixi.sh) if it is not already on your `PATH`, then create a
-project with the Mojo and Modular community channels:
+[Modular community channel](https://github.com/modular/modular-community).
+Install [Pixi](https://pixi.sh) if it is not already on your `PATH`, then create
+a project with the Mojo and Modular community channels:
 
 ```sh
 pixi init apn-start \
