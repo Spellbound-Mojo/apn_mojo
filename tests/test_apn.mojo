@@ -278,6 +278,65 @@ def test_multiplication_kernels_against_word_reference() raises:
                     assert_equal(work[capacity + 1], UInt32(0xA5A5A5A5))
 
 
+def test_fused_multiply_add_against_plain_operations() raises:
+    # self += a b and self -= a b in place agree with the plain operations for
+    # every sign, zero operands, values shared with another handle (left
+    # untouched), sums carrying past the top, differences crossing zero or
+    # cancelling to inline results, the Int64 boundary, and products past the
+    # stack buffer and the Karatsuba threshold.
+    var seed = UInt64(0x2545F4914F6CDD1D)
+
+    def value(words: Int, mut seed: UInt64, negative: Bool, pattern: Int) raises -> Integer:
+        var v = Integer(0)
+        for i in range(words):
+            seed = seed * 6364136223846793005 + 1442695040888963407
+            var w = UInt64(0xFFFFFFFF) if pattern == 1 else (UInt64(1) << 31 if pattern == 2 and i == 0 else (seed >> 32))
+            v = (v << Integer(32)) + Integer(w)
+        return -v if negative else v
+
+    for sizes in [(0, 3, 2), (1, 1, 1), (2, 2, 4), (3, 1, 0), (5, 33, 37), (40, 40, 2), (95, 97, 10), (96, 96, 200), (120, 3, 130), (7, 200, 9)]:
+        for pattern in range(3):
+            for signs in range(8):
+                for subtract in [False, True]:
+                    var a = value(sizes[0], seed, signs & 1 == 1, pattern)
+                    var b = value(sizes[1], seed, signs & 2 == 2, pattern)
+                    var r = value(sizes[2], seed, signs & 4 == 4, pattern)
+                    var before = r.copy()
+                    var shared = r.copy()
+                    if subtract:
+                        r._submul(a, b)
+                    else:
+                        r._addmul(a, b)
+                    assert_equal(r, before - a * b if subtract else before + a * b)
+                    assert_equal(shared, before)
+    # Exact cancellation, short results and the Int64 boundary.
+    for words in [1, 2, 3, 9]:
+        var a = value(words, seed, False, 0)
+        var b = value(words, seed, True, 1)
+        var r = a * b
+        r._submul(a, b)
+        assert_equal(r, Integer(0))
+        r = a * b + Integer(Int64.MIN)
+        r._submul(a, b)
+        assert_equal(r, Integer(Int64.MIN))
+        r = a * b - Integer(1) - Integer(Int64.MAX)
+        r._addmul(-a, b)
+        assert_equal(r, Integer(-1) - Integer(Int64.MAX))
+    # A running sum reuses its own block and matches the plain sum.
+    var total = Integer(0)
+    var expected = Integer(0)
+    for i in range(300):
+        var a = value(i % 23, seed, i % 3 == 0, i % 3)
+        var b = value((i * 7) % 19, seed, i % 5 == 0, 0)
+        if i % 2:
+            total._submul(a, b)
+            expected = expected - a * b
+        else:
+            total._addmul(a, b)
+            expected = expected + a * b
+        assert_equal(total, expected)
+
+
 def test_multiplication_carry_patterns_against_word_reference() raises:
     # Worst-case carries (all-ones words, a top bit alone, alternating words,
     # sparse ones) at sizes whose Karatsuba halves leave odd and even tails for
