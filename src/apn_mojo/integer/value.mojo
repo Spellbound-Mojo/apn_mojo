@@ -5,6 +5,7 @@ from std.builtin.comparable import Comparable
 from std.builtin.int import IntableRaising
 from std.sys import bit_width_of, size_of
 from std.utils import Variant
+from std.memory import MaybeUninit
 from std.bit import count_leading_zeros, count_trailing_zeros
 from std.hashlib import Hasher
 from std.os import abort
@@ -21,7 +22,7 @@ from ._division import _load_limbs, _store_words, _divide_limbs, _divide_2by1, _
 from ._gcd import _native_gcd, _limb_gcd
 from ._scalar_update import _finish_words, _update_words, _used
 from ._words import _add_words, _subtract_words, _shift_left_words, _shift_right_words, _compare_words, _bitwise_words
-from ._multiplication import _product_scratch_size, _multiply_with_scratch, _multiply_short_into, _product_used, _high_product_into
+from ._multiplication import _product_scratch_size, _multiply_with_scratch, _multiply_short_into, _product_used, _high_product_into, _KARATSUBA_WORDS
 from ._magnitude import _LargeInteger, _SharedMagnitude
 from ._operand import (
     _IntegerOperand,
@@ -45,6 +46,8 @@ from ..common._traits import _BatchElement
 # Decimal text moves nineteen digits per step on 64-bit limbs: 10**19 is the
 # largest power of ten below 2**64, and its high bit is set, so dividing by it
 # can use a precomputed reciprocal (_division._reciprocal(10**19)).
+comptime _FUSED_WORDS = 192
+"""Product words up to which fused multiply-adds keep the product on the stack."""
 comptime _TEN19 = UInt64(10_000_000_000_000_000_000)
 comptime _TEN19_RECIPROCAL = UInt64(15581492618384294730)
 
@@ -1843,6 +1846,117 @@ struct Integer(
             words._length = length + Int(target.unsafe_offset(length)[] != 0)
             return
         self = self._add(rhs, subtract)
+
+    def _addmul(mut self, a: Self, b: Self) raises:
+        """`self += a * b` without a heap temporary for products of up to
+        _FUSED_WORDS words; see `_fused`."""
+        self._fused(a, b, False)
+
+    def _submul(mut self, a: Self, b: Self) raises:
+        """`self -= a * b` without a heap temporary for products of up to
+        _FUSED_WORDS words; see `_fused`."""
+        self._fused(a, b, True)
+
+    def _fused(mut self, a: Self, b: Self, subtract: Bool) raises:
+        """`self += a * b` (or `-=`) with no heap temporary: the product goes to
+        a stack buffer, by the same kernels as `a * b`, and is added to or
+        subtracted from this value's words in place. The words are copied once
+        into a block of their own when another handle shares them, they are
+        inline, or they are too short, and later calls reuse that block.
+        Products past the stack buffer take `self += a * b`. Either way the
+        value is unchanged if it raises."""
+        var small_a = a._inline_words()
+        var small_b = b._inline_words()
+        var x = a._words_span(small_a)
+        var y = b._words_span(small_b)
+        if not len(x) or not len(y):
+            return
+        var count = len(x) + len(y)
+        if count > _FUSED_WORDS or min(len(x), len(y)) >= _KARATSUBA_WORDS:
+            self._accumulate(a * b, subtract)
+            return
+        var stack = MaybeUninit[Array[UInt32, _FUSED_WORDS]]()
+        var product = Span(unsafe_ptr=stack.unsafe_ptr().unsafe_bitcast[UInt32](), length=count)
+        var p_used: Int
+        if len(y) <= 2:
+            p_used = _multiply_short_into(x, y, product)
+        elif len(x) <= 2:
+            p_used = _multiply_short_into(y, x, product)
+        else:
+            p_used = _multiply_with_scratch(x, y, product, Int(x.unsafe_ptr()) == Int(y.unsafe_ptr()), 0)
+        var term_negative = (a._negative() != b._negative()) != subtract
+        var negative = self._negative()
+        var small_s = self._inline_words()
+        var current = self._words_span(small_s)
+        var used = len(current)
+        if not used:
+            negative = term_negative
+        # One spare word: a sum fits it, and a difference's sign shows in it.
+        var length = max(used, p_used) + 1
+        if (
+            self._storage.isa[Self._Shared]()
+            and self._storage[Self._Shared].count() == 1
+            and self._storage[Self._Shared].weak_count() == 0
+            and self._storage[Self._Shared][].words.capacity() >= length
+        ):
+            self._storage[Self._Shared][].words.resize(length, 0)
+        else:
+            var owner = Self._Shared.uninitialized(length, negative)
+            var fresh = owner[].words.unsafe_ptr()
+            for i in range(used):
+                fresh.unsafe_offset(i)[] = current.unsafe_get(i)
+            for i in range(used, length):
+                fresh.unsafe_offset(i)[] = 0
+            # The old words are no longer read past this point.
+            self._storage = Self._Storage(owner^)
+        var w = self._storage[Self._Shared][].words.unsafe_ptr().unsafe_origin_cast[MutUntrackedOrigin]()
+        if negative == term_negative:
+            var carry = UInt64(0)
+            var i = 0
+            while i < p_used:
+                var t = UInt64(w.unsafe_offset(i)[]) + UInt64(product.unsafe_get(i)) + carry
+                w.unsafe_offset(i)[] = UInt32(t)
+                carry = t >> 32
+                i += 1
+            while carry:
+                var t = UInt64(w.unsafe_offset(i)[]) + carry
+                w.unsafe_offset(i)[] = UInt32(t)
+                carry = t >> 32
+                i += 1
+        else:
+            var borrow = UInt32(0)
+            var i = 0
+            while i < p_used:
+                var v = w.unsafe_offset(i)[]
+                var d = UInt64(v) - UInt64(product.unsafe_get(i)) - UInt64(borrow)
+                w.unsafe_offset(i)[] = UInt32(d)
+                borrow = UInt32(d >> 63)
+                i += 1
+            while borrow and i < length:
+                var v = w.unsafe_offset(i)[]
+                w.unsafe_offset(i)[] = v - 1
+                borrow = UInt32(v == 0)
+                i += 1
+            if w.unsafe_offset(length - 1)[]:
+                # The product outweighed the value: the words hold 2**(32 length)
+                # minus the difference, so negate them and flip the sign.
+                var carry = UInt64(1)
+                for k in range(length):
+                    var t = UInt64(~w.unsafe_offset(k)[]) + carry
+                    w.unsafe_offset(k)[] = UInt32(t)
+                    carry = t >> 32
+                negative = not negative
+        var top = length
+        while top and not w.unsafe_offset(top - 1)[]:
+            top -= 1
+        self._storage[Self._Shared][].negative = negative
+        if top <= 2:
+            # Short results take the inline form.
+            var owner = self._storage[Self._Shared]
+            self = Self(0)
+            self = Self._from_product[False](owner^, top)
+        else:
+            self._storage[Self._Shared][].words._length = top
 
     def __imul__(mut self, var rhs: Self) raises:
         self._assign(rhs^, 2)
