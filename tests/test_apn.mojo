@@ -278,6 +278,51 @@ def test_multiplication_kernels_against_word_reference() raises:
                     assert_equal(work[capacity + 1], UInt32(0xA5A5A5A5))
 
 
+def test_multiplication_carry_patterns_against_word_reference() raises:
+    # Worst-case carries (all-ones words, a top bit alone, alternating words,
+    # sparse ones) at sizes whose Karatsuba halves leave odd and even tails for
+    # the two-word linear passes, products and squares, against the same
+    # independent 32-bit schoolbook.
+    var seed = UInt64(0x9E3779B97F4A7C15)
+    for left in [95, 96, 97, 190, 191, 192, 193, 383, 384, 385, 767]:
+        for right in [left, left - 1, left // 2 + 1, 97]:
+            for pattern in range(4):
+                var a = List[UInt32](length=left, fill=0)
+                var b = List[UInt32](length=right, fill=0)
+                for i in range(left):
+                    seed = seed * 6364136223846793005 + 1442695040888963407
+                    if pattern == 0:
+                        a[i] = 0xFFFFFFFF
+                    elif pattern == 1:
+                        a[i] = 0xFFFFFFFF if i % 2 else 0
+                    elif pattern == 2:
+                        a[i] = 0x80000000 if i == left - 1 else UInt32(seed >> 63)
+                    else:
+                        a[i] = UInt32(seed >> 32)
+                for i in range(right):
+                    seed = seed * 6364136223846793005 + 1442695040888963407
+                    b[i] = 0xFFFFFFFF if pattern != 3 else UInt32(seed >> 32)
+                for same in [False, True]:
+                    if same:
+                        b = a.copy()
+                    var count = len(a) + len(b)
+                    var expected = List[UInt32](length=count, fill=0)
+                    for i in range(len(a)):
+                        var carry = UInt64(0)
+                        for j in range(len(b)):
+                            var total = UInt64(a[i]) * UInt64(b[j]) + UInt64(expected[i + j]) + carry
+                            expected[i + j] = UInt32(total)
+                            carry = total >> 32
+                        expected[i + len(b)] = UInt32(carry)
+                    var capacity = _product_scratch_size(len(a), len(b), same)
+                    var work = List[UInt32](length=capacity, fill=0xA5A5A5A5)
+                    var actual = List[UInt32](length=count, fill=0xA5A5A5A5)
+                    var scratch = Span(unsafe_ptr=work.unsafe_ptr().unsafe_origin_cast[MutAnyOrigin](), length=capacity)
+                    _ = _multiply_into(Span(a), Span(b), Span(actual), same, scratch)
+                    for i in range(count):
+                        assert_equal(actual[i], expected[i])
+
+
 def test_integer_signed_division() raises:
     for a in [-7, 0, 7]:
         for b in [-3, 3]:

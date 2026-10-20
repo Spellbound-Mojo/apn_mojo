@@ -4,7 +4,7 @@ from ..common._sizes import _checked_count, _checked_sum
 from std.memory import MaybeUninit
 
 comptime _KARATSUBA_WORDS = 96
-comptime _KARATSUBA_SQUARE_WORDS = 512
+comptime _KARATSUBA_SQUARE_WORDS = 96
 
 
 def _product_scratch_size(left: Int, right: Int, same_operand: Bool = False) raises -> Int:
@@ -255,23 +255,21 @@ def _square_basecase(
 ):
     r.fill(0)
     var size = len(a) // 2
-    for i in range(size):
-        var word = UInt128(_load_pair(a, 2 * i))
-        var carry = UInt64(0)
-        for j in range(i + 1, size):
-            var offset = 2 * (i + j)
-            var total = (
-                word * UInt128(_load_pair(a, 2 * j))
-                + UInt128(_load_pair(r, offset)) + UInt128(carry)
-            )
-            _put_pair(r, offset, UInt64(total))
-            carry = UInt64(total >> 64)
-        _put_pair(r, 2 * (i + size), carry)
+    # The off-diagonal triangle: row i adds a_i (a_(i+1) ...) at digit 2 i + 1,
+    # by the unrolled row kernel; its top pair lies past every earlier row.
+    for i in range(size - 1):
+        _product_row[True](
+            _product_slice(a, 2 * (i + 1), 2 * size), _load_pair(a, 2 * i),
+            r, 2 * (2 * i + 1),
+        )
+    # Double the triangle, two words at a time (2 len(a) is even).
     var carry = UInt64(0)
-    for i in range(2 * len(a)):
-        var total = (UInt64(r.unsafe_get(i)) << 1) | carry
-        r.unsafe_get(i) = UInt32(total)
-        carry = total >> 32
+    var i = 0
+    while i < 2 * len(a):
+        var total = _load_pair(r, i)
+        _put_pair(r, i, (total << 1) | carry)
+        carry = total >> 63
+        i += 2
     carry = 0
     for i in range(size):
         var word = UInt128(_load_pair(a, 2 * i))
@@ -298,7 +296,17 @@ def _product_subtract(
 ):
     var common = min(len(a), len(b))
     var borrow = UInt64(0)
-    for i in range(common):
+    # Two words at a time over the common even prefix, then word by word.
+    var start = 0
+    while start + 2 <= common:
+        var x = _load_pair(a, start)
+        var y = _load_pair(b, start)
+        var d = x - y
+        var low = UInt64(x < y)
+        _put_pair(r, start, d - borrow)
+        borrow = low | UInt64(d < borrow)
+        start += 2
+    for i in range(start, common):
         var x = UInt64(a.unsafe_get(i))
         var sub = UInt64(b.unsafe_get(i)) + borrow
         r.unsafe_get(i) = UInt32(x - sub)
@@ -337,7 +345,17 @@ def _product_cross_words[subtract: Bool](
     # z0+z2 - (a0-a1)(b0-b1); signed carry stays within two limb magnitudes.
     var carry = Int64(0)
     var common = min(len(low), len(high))
-    for i in range(common):
+    # Two words at a time over the common even prefix: the carry stays the
+    # same signed multiple of the next word's weight.
+    var start = 0
+    while start + 2 <= common:
+        var total = Int128(carry) + Int128(_load_pair(low, start)) + Int128(_load_pair(high, start))
+        var difference = Int128(_load_pair(r, start))
+        total += -difference if subtract else difference
+        _put_pair(r, start, UInt64(total))
+        carry = Int64(total >> 64)
+        start += 2
+    for i in range(start, common):
         var total = carry + Int64(low.unsafe_get(i)) + Int64(high.unsafe_get(i))
         var difference = Int64(r.unsafe_get(i))
         total += -difference if subtract else difference
@@ -370,7 +388,13 @@ def _product_accumulate(
     r: Span[mut=True, UInt32, _], a: Span[mut=False, UInt32, _], offset: Int,
 ):
     var carry = UInt64(0)
-    for i in range(len(a)):
+    var start = 0
+    while start + 2 <= len(a):
+        var total = UInt128(_load_pair(r, offset + start)) + UInt128(_load_pair(a, start)) + UInt128(carry)
+        _put_pair(r, offset + start, UInt64(total))
+        carry = UInt64(total >> 64)
+        start += 2
+    for i in range(start, len(a)):
         var total = UInt64(r.unsafe_get(offset + i)) + UInt64(a.unsafe_get(i)) + carry
         r.unsafe_get(offset + i) = UInt32(total)
         carry = total >> 32
