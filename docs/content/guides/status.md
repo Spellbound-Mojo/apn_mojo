@@ -2,8 +2,8 @@
 
 ## Supported platforms
 
-The main-branch source checkout targets **Mojo 1.2.0** on Linux and macOS;
-the published 1.0.1 package uses Mojo 1.1.0. You can work with exact
+APN Mojo 1.0.2 requires **Mojo 1.2.0 or newer** on Linux and macOS;
+the precompiled channel package supports the 1.2.x compiler series. You can work with exact
 integers and fractions, binary floats, exact and rounded complex numbers,
 and real and complex balls. The
 [verification chapter](../architecture/verification.md) explains how these

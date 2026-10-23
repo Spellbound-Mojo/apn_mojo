@@ -13,18 +13,18 @@ Python.
 ![Mojo 1.2.0](https://img.shields.io/badge/Mojo-1.2.0-orange)
 ![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20macOS-blue)
 
-The main-branch source checkout targets **Mojo 1.2.0** on Linux and macOS.
-The published 1.0.1 package uses Mojo 1.1.0. See the
+APN Mojo 1.0.2 requires **Mojo 1.2.0 or newer** on Linux and macOS.
+The source checkout locks Mojo 1.2.0 for reproducible builds. See the
 [installation guide](docs/content/start/installation.md) for system requirements
 and [support and limitations](docs/content/guides/status.md) for library boundaries.
 
 ## Getting started
 
-APN Mojo is published as `apn_mojo` in the
-[Modular community channel](https://github.com/modular/modular-community). Add
-the channel to your [Pixi](https://pixi.sh) project and install the package.
-The published release is 1.0.1, verified with Mojo 1.1.0 on Linux x86-64
-and macOS arm64. Use the source checkout below for Mojo 1.2.0:
+APN Mojo is packaged as `apn_mojo` in the
+[Modular community channel](https://github.com/modular/modular-community).
+Version 1.0.2 will be available there once its channel pull request merges.
+Until then, use the source checkout below. After publication, add the channel
+to your [Pixi](https://pixi.sh) project and install the package:
 
 ```toml
 # pixi.toml
@@ -33,8 +33,11 @@ channels = ["https://conda.modular.com/max", "https://repo.prefix.dev/modular-co
 ```
 
 ```sh
-pixi add apn_mojo "mojo==1.1.0"
+pixi add "apn_mojo==1.0.2" "mojo>=1.2.0"
 ```
+
+The precompiled package requires `mojo-compiler >=1.2.0,<1.3.0a0`, matching
+the compiler's minor version used to build it.
 
 Save [first_integer.mojo](docs/examples/first_integer.mojo) beside your
 project's `pixi.toml`, then run it; the installed package needs no `-I` flag:

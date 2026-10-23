@@ -2,18 +2,21 @@
 
 ## Supported platforms
 
-The main-branch source checkout targets **Mojo 1.2.0** on Linux and macOS.
-The published 1.0.1 package uses **Mojo 1.1.0**; its installation commands
-below retain that compiler pin.
-[Pixi](https://pixi.sh/) installs the pinned compiler and dependencies for
+APN Mojo 1.0.2 requires **Mojo 1.2.0 or newer** on Linux and macOS.
+The source checkout locks Mojo 1.2.0 for reproducible builds.
+[Pixi](https://pixi.sh/) installs the compiler and dependencies for
 Linux x86-64 and macOS on Apple silicon. Check the
 [Mojo system requirements](https://docs.modular.com/mojo/requirements/)
 for operating-system and toolchain prerequisites.
 
 ## Install the package
 
-APN Mojo is published as `apn_mojo` in the
+APN Mojo is packaged as `apn_mojo` in the
 [Modular community channel](https://github.com/modular/modular-community).
+Version 1.0.2 will be available once its channel pull request merges. Until
+then, [work from a checkout](#work-from-a-checkout). After publication,
+use the commands below to install it.
+
 Install [Pixi](https://pixi.sh) if it is not already on your `PATH`, then create
 a project with the Mojo and Modular community channels:
 
@@ -23,8 +26,12 @@ pixi init apn-start \
   --channel https://repo.prefix.dev/modular-community \
   --channel conda-forge
 cd apn-start
-pixi add apn_mojo "mojo==1.1.0"
+pixi add "apn_mojo==1.0.2" "mojo>=1.2.0"
 ```
+
+The precompiled package requires `mojo-compiler >=1.2.0,<1.3.0a0` because
+its artifact is tied to the compiler's minor version. Pixi selects a matching
+compiler when it resolves the environment.
 
 Run the remaining commands from `apn-start`, the directory containing the new
 `pixi.toml`. Pixi installs the precompiled `apn_mojo` package where Mojo finds
@@ -50,7 +57,7 @@ channels = ["https://conda.modular.com/max", "https://repo.prefix.dev/modular-co
 
 ## Work from a checkout
 
-For Mojo 1.2.0, install Pixi, clone the main branch, and enter the project directory:
+Install Pixi, clone the repository, and enter the project directory:
 
 ```sh
 git clone https://github.com/Spellbound-Mojo/apn_mojo.git

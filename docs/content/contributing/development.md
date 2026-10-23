@@ -11,7 +11,7 @@ Set up your development environment using Pixi as described in the
 [installation guide](../start/installation.md). Run the commands below from
 the project directory containing `pixi.toml`.
 
-- The default Pixi environment pins **Mojo 1.2.0** from the stable Modular channel.
+- The default Pixi environment requires **Mojo >=1.2.0** from the stable Modular channel; `pixi.lock` selects 1.2.0.
 - The `comparison` environment adds Python reference libraries (`mpmath`, `gmpy2` with MPFR and MPC, and `python-flint` with Arb) and requires Cargo to build Rug.
 - The `docs` environment provides MkDocs and Pygments.
 
@@ -21,10 +21,11 @@ memory guards use `systemd` or `prlimit` to enforce the 12 GB cap.
 
 ## Mojo 1.2 migration
 
-The main branch now selects stable Mojo 1.2.0 (`2016d0cd`), with the lockfile
-resolved for Linux x86-64 and macOS arm64. The published `apn_mojo` 1.0.1
-package still uses Mojo 1.1.0; the installation guide keeps its existing package
-commands and identifies source checkouts as the path to the newer compiler.
+APN Mojo 1.0.2 requires Mojo >=1.2.0. The lockfile selects stable Mojo 1.2.0
+(`2016d0cd`) for Linux x86-64 and macOS arm64. The channel recipe builds with
+that compiler and requires `mojo-compiler >=1.2.0,<1.3.0a0` at runtime.
+The [installation guide](../start/installation.md) explains how to use the
+source checkout while the channel update awaits publication.
 
 Mojo renamed `std.hashlib` to `std.hash`. The representation keys and the
 Integer, Rational, and ExactComplex implementations now import `Hasher` from
@@ -91,7 +92,8 @@ executable starts quickly; a cold build can take several minutes.
 
 The harness caches binaries by source hash and compiler identity. If neither
 changes, the next run executes the cached binary immediately. AddressSanitizer
-builds use `-O1` because Mojo 1.1.0's runner can crash with `-O0 --sanitize=address`.
+builds use `-O1`, retaining the workaround for a runner crash observed with
+Mojo 1.1.0 at `-O0 --sanitize=address`.
 
 Before a commit, measure only the speedup of the functions the change is
 about, on the scalar benchmark or by cycle counts, and run nothing else: the
@@ -125,7 +127,11 @@ When submitting changes:
 - Numerical changes require running `compare` against reference libraries.
 - Changes affecting the public API require updating documentation, docstrings, and verified examples.
 
-## Mojo 1.1 practices
+## Mojo practices
+
+These implementation choices remain in use after the Mojo 1.2 migration.
+The performance observations below were measured with Mojo 1.1; remeasure
+affected paths before changing a workaround on a newer compiler.
 
 - **Lambdas**: Use the syntax `lambda (x: T, y: T) raises -> R: expr`. Lambdas that capture closures cannot be passed as compile-time parameters to `vmap` or `lift`. Because lambda bodies must be single expressions, in-place updates are written as `acc.__iadd__(x)`.
 - **Struct return costs**: Returning large structs (such as multi-limb results or `Optional` types) across non-inlined function boundaries incurs a 15–20 ns overhead. Inline small fast paths, and prefer sentinel values over `Optional` wrappers in internal kernels.

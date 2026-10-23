@@ -45,8 +45,8 @@ documentation.
 
 ### Why one declaration per name and family
 
-`vmap` and `lift` take a compile-time function value. Mojo 1.1 cannot treat an
-overloaded root name as that one value, so callers use family names such as
+`vmap` and `lift` take one compile-time function value. Callers select a
+specific declaration through family names such as
 `apn_mojo.float.add`.
 
 Argument adapters let one declaration accept several numeric types while

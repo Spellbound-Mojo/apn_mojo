@@ -107,7 +107,7 @@ arithmetic temporaries.
 ## Mapping functions
 
 `vmap[f]` maps a pure function with a supported signature. `f` is a compile-time
-parameter; Mojo 1.1 cannot pass runtime function values across worker threads.
+parameter, so worker threads call the function selected at compile time.
 The [mapping reference](../reference/batch.md#mapping-functions) gives the
 supported argument and result types.
 
@@ -314,8 +314,8 @@ storage reference. Its origin is the reader that already retains the storage;
 even the pointer used by a linear lifted fold is read-only and carries that
 origin.
 
-Mojo 1.1 cannot infer this relationship through the retained owner and list,
-so the helper contains an explicit origin cast. Each caller must keep the
+The helper expresses this relationship through the retained owner and list
+with an explicit origin cast. Each caller must keep the
 list alive and leave its storage and borrowed elements unchanged until the
 borrow ends. Mapping readers may advance their cursor or replace a converted
 argument only after the callback returns. Their return types expose an
