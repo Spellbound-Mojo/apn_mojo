@@ -2,7 +2,9 @@
 
 ## Supported platforms
 
-APN Mojo supports **Linux and macOS with Mojo 1.1.0**.
+The main-branch source checkout targets **Mojo 1.2.0** on Linux and macOS.
+The published 1.0.1 package uses **Mojo 1.1.0**; its installation commands
+below retain that compiler pin.
 [Pixi](https://pixi.sh/) installs the pinned compiler and dependencies for
 Linux x86-64 and macOS on Apple silicon. Check the
 [Mojo system requirements](https://docs.modular.com/mojo/requirements/)
@@ -48,7 +50,7 @@ channels = ["https://conda.modular.com/max", "https://repo.prefix.dev/modular-co
 
 ## Work from a checkout
 
-After installing Pixi, clone the repository and enter the project directory:
+For Mojo 1.2.0, install Pixi, clone the main branch, and enter the project directory:
 
 ```sh
 git clone https://github.com/Spellbound-Mojo/apn_mojo.git

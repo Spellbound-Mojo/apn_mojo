@@ -3,7 +3,7 @@
 from std.math import Absable
 from std.builtin.int import IntableRaising
 from std.builtin.bool import Boolable
-from std.hashlib import Hasher
+from std.hash import Hasher
 
 from ..integer.value import Integer, _unsigned_magnitude
 from ..integer._gcd import _native_gcd

@@ -10,7 +10,8 @@ scalar functions once, then reuse them across arrays and build reductions,
 accumulations, and outer products with its vectorization tools.
 
 All of this runs in Mojo, without a runtime dependency on GMP, MPFR, MPC, or
-Python. APN Mojo supports Linux and macOS with Mojo 1.1.0.
+Python. The main-branch checkout targets Mojo 1.2.0 on Linux and macOS;
+the published 1.0.1 package uses Mojo 1.1.0.
 
 <div class="hero-actions" markdown="1">
 [Get started](start/installation.md){ .button .primary }

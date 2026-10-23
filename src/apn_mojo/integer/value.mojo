@@ -7,7 +7,7 @@ from std.sys import bit_width_of, size_of
 from std.utils import Variant
 from std.memory import MaybeUninit
 from std.bit import count_leading_zeros, count_trailing_zeros
-from std.hashlib import Hasher
+from std.hash import Hasher
 from std.os import abort
 
 from ..rational.value import Rational

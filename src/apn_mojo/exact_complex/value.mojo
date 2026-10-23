@@ -1,6 +1,6 @@
 """Exact complex numbers: two Rational parts, exact arithmetic, text and JSON."""
 
-from std.hashlib import Hasher
+from std.hash import Hasher
 from ..integer.value import Integer
 from ..rational.value import Rational
 from ..float.value import Float

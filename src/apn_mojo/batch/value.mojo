@@ -673,7 +673,7 @@ def _float_tensor_arithmetic(
         diagnostic="Float batch", index_prefix=" element ",
     )
     return _float_from_tensor(
-        values^,
+        values,
         context.value().format() if context else inputs.default_format() if not inputs.length() else FloatFormat(),
         like,
     )
@@ -2582,7 +2582,7 @@ struct Batch[T: ImplicitlyCopyable & Deinitable](
 
     def __setitem__(mut self, index: Int, var value: Self.T) raises:
         var adjusted = self._checked_index(index)
-        self._assign_selection(_Selection(adjusted, 1, 1), Self(value^), True, None)
+        self._assign_selection(_Selection(adjusted, 1, 1), Self(value), True, None)
 
     def __getitem__(self, selection: Mask) raises -> Self:
         """The mask-selected row-major values as a new vector."""

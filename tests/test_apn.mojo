@@ -3001,7 +3001,7 @@ def test_public_variadic_tuple_inputs() raises:
     assert_equal(vmap[total](in_axes=(0, 0, 0)).vmap(out_shape=[4])(empty_matrices).shape(), [0, 4])
     var hint_list: List[Int] = [4]
     var hints = (source.shape(), Optional(source.shape()), hint_list.copy())
-    assert_equal(vmap[identity](in_axes=(0, 0, 0)).vmap(out_shape=hints^)(empty_matrices)[2].shape(), [0, 4])
+    assert_equal(vmap[identity](in_axes=(0, 0, 0)).vmap(out_shape=hints)(empty_matrices)[2].shape(), [0, 4])
     assert_equal(vmap[total](in_axes=(0, 0, 0)).vmap()(empty_matrices).shape(), [0, 4])
     var inner_empty = Batch[Integer](List[Integer](), shape=[2, 0])
     assert_equal(vmap[total](in_axes=(0, 0, 0)).vmap()((inner_empty, inner_empty, inner_empty)).shape(), [2, 0])

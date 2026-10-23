@@ -264,7 +264,7 @@ struct _Level(Copyable):
 
 
 def _level(var in_axes: _Axes, var out_axes: _Axes, axis_size: Optional[Int], var out_shape: _Shapes) -> _Level:
-    return _Level(in_axes^, out_axes^, axis_size, out_shape^)
+    return _Level(in_axes^, out_axes^, axis_size, out_shape)
 
 
 struct _AxisLevels(Copyable, Defaultable):
@@ -785,7 +785,7 @@ def _finish[R: ImplicitlyCopyable & Deinitable](
         ordered = ordered and axes[i] == i
     comptime kind = _leaf_kind[R]()
     comptime if kind == _BOOL or kind == _MASK:
-        var mask = Mask(collector.bits, shape=shape^)
+        var mask = Mask(collector.bits, shape=shape)
         if ordered:
             return rebind_var[_LeafOutput[R]](mask^)
         return rebind_var[_LeafOutput[R]](mask.transpose(axes))

@@ -11,13 +11,39 @@ Set up your development environment using Pixi as described in the
 [installation guide](../start/installation.md). Run the commands below from
 the project directory containing `pixi.toml`.
 
-- The default Pixi environment pins **Mojo 1.1.0**.
+- The default Pixi environment pins **Mojo 1.2.0** from the stable Modular channel.
 - The `comparison` environment adds Python reference libraries (`mpmath`, `gmpy2` with MPFR and MPC, and `python-flint` with Arb) and requires Cargo to build Rug.
 - The `docs` environment provides MkDocs and Pygments.
 
 Library programs and documentation builds run on Linux and macOS. The
 `test`, `docs-test`, and `report` runners require Linux: their compiler
 memory guards use `systemd` or `prlimit` to enforce the 12 GB cap.
+
+## Mojo 1.2 migration
+
+The main branch now selects stable Mojo 1.2.0 (`2016d0cd`), with the lockfile
+resolved for Linux x86-64 and macOS arm64. The published `apn_mojo` 1.0.1
+package still uses Mojo 1.1.0; the installation guide keeps its existing package
+commands and identifies source checkouts as the path to the newer compiler.
+
+Mojo renamed `std.hashlib` to `std.hash`. The representation keys and the
+Integer, Rational, and ExactComplex implementations now import `Hasher` from
+that module. Four transfer markers on borrowed arguments were removed from
+batch mapping, floating-point batch construction, and scalar assignment; the
+compiler identifies those transfers as having no effect. The empty nested-map
+test uses the same borrowed-argument spelling. Mathematical algorithms, stable
+hash encodings, public declarations, and expected example outputs are unchanged.
+
+The functional gate passes all 270 scenarios in 25 suites, compiled sequentially
+with `-j1 -O3 --fp-mode=contract=off --Werror` under the 12 GB compiler guard.
+This includes the stable-hash vectors and borrowed-storage lifetime checks.
+All 69 documentation programs match their existing expected output at O3 with
+`--Werror`; `scripts/api_docs.py --check` confirms the public reference is current.
+The package also precompiles with `--Werror` for the kernel migration, whose
+source snapshot and artifact hashes identify the same final arithmetic sources.
+Migration validation records are under `.cache/mojo-1.2/`. Validation in this
+workspace runs on Linux; resolving macOS packages does not constitute a macOS
+execution check. Historical performance measurements keep their Mojo 1.1 labels.
 
 ## Repository layout
 

@@ -7,7 +7,7 @@ its whole representation instead, as a computer algebra system needs when it
 interns numbers: each signed zero, each format and NaN is its own key.
 """
 
-from std.hashlib import Hasher
+from std.hash import Hasher
 from ..float.value import Float
 from ..complex.value import Complex
 from ..float.math import stable_hash as _float_stable_hash

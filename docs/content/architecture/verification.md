@@ -1,8 +1,11 @@
 # Verification
 
 Verification combines tests of documented behavior with mathematical
-arguments for algorithms and rounding decisions. The tests use Mojo 1.1.0
-and establish results for the paths and inputs they exercise.
+arguments for algorithms and rounding decisions. The test runner uses the
+compiler pinned in `pixi.toml` and establishes results for the paths and inputs
+it exercises. The [development page](../contributing/development.md) records
+the Mojo 1.2.0 migration checks; earlier measurements retain their original
+Mojo 1.1.0 toolchain labels.
 
 ## Layers
 

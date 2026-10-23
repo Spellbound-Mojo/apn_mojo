@@ -10,10 +10,11 @@ accumulations, and outer products with its vectorization tools.
 All of this runs in Mojo, without a runtime dependency on GMP, MPFR, MPC, or
 Python.
 
-![Mojo 1.1.0](https://img.shields.io/badge/Mojo-1.1.0-orange)
+![Mojo 1.2.0](https://img.shields.io/badge/Mojo-1.2.0-orange)
 ![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20macOS-blue)
 
-APN Mojo supports **Linux and macOS with Mojo 1.1.0**. See the
+The main-branch source checkout targets **Mojo 1.2.0** on Linux and macOS.
+The published 1.0.1 package uses Mojo 1.1.0. See the
 [installation guide](docs/content/start/installation.md) for system requirements
 and [support and limitations](docs/content/guides/status.md) for library boundaries.
 
@@ -21,8 +22,9 @@ and [support and limitations](docs/content/guides/status.md) for library boundar
 
 APN Mojo is published as `apn_mojo` in the
 [Modular community channel](https://github.com/modular/modular-community). Add
-the channel to your [Pixi](https://pixi.sh) project and install the package. It
-is verified with Mojo 1.1.0 on Linux x86-64 and macOS arm64:
+the channel to your [Pixi](https://pixi.sh) project and install the package.
+The published release is 1.0.1, verified with Mojo 1.1.0 on Linux x86-64
+and macOS arm64. Use the source checkout below for Mojo 1.2.0:
 
 ```toml
 # pixi.toml
